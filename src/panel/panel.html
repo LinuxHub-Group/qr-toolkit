@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>二维码工具箱</title>
+  <link rel="stylesheet" href="panel.css" />
+</head>
+<body data-mode="text">
+  <!--
+    顶部工具条是悬浮窗的固定区域（sticky），右上角放关闭按钮。
+    整条 bar 同时充当拖动把手，所以按钮与开关需要排除在拖动之外（见 panel.js）。
+  -->
+  <header class="bar" id="bar">
+    <h1 id="title">选中文字 → 二维码</h1>
+    <div class="bar-tools">
+      <label class="switch" title="开启后，点击悬浮窗以外的任意位置即关闭；关闭后请用右上角 × 或 Esc 退出">
+        <input type="checkbox" id="closeOnOutside" />
+        <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+        <span class="switch-text">点击外部关闭</span>
+      </label>
+      <button id="closeOverlay" class="icon-btn" type="button" title="关闭悬浮窗（Esc）" aria-label="关闭悬浮窗">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+          <path d="M4 4 L12 12 M12 4 L4 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ── 文本模式：生成二维码 ───────────────────────────────── -->
+  <main id="paneText" class="pane">
+    <div class="field">
+      <label class="field-label" for="text">二维码内容（可直接编辑，修改后实时重新生成）</label>
+      <textarea id="text" rows="3" spellcheck="false" placeholder="在此输入或粘贴要生成二维码的文字…"></textarea>
+    </div>
+
+    <div class="row">
+      <div class="field field-inline">
+        <label class="field-label" for="ecc">纠错级别</label>
+        <select id="ecc">
+          <option value="L">L · 7%</option>
+          <option value="M" selected>M · 15%</option>
+          <option value="Q">Q · 25%</option>
+          <option value="H">H · 30%</option>
+        </select>
+      </div>
+      <div class="field field-inline">
+        <label class="field-label" for="exportSize">导出尺寸</label>
+        <select id="exportSize" title="模块必须是整数像素，因此真实边长会取到最接近的整数模块倍数，保存后会在提示里显示实际尺寸">
+          <option value="512">约 512 px</option>
+          <option value="1024" selected>约 1024 px</option>
+          <option value="2048">约 2048 px</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="preview">
+      <canvas id="qrCanvas" width="200" height="200" hidden></canvas>
+      <p class="preview-empty" id="qrEmpty">等待输入内容</p>
+    </div>
+
+    <p class="meta" id="qrMeta">—</p>
+
+    <div class="actions">
+      <button id="copyImage" class="primary" type="button">复制二维码</button>
+      <button id="downloadPng" type="button">下载 PNG</button>
+      <button id="copyText" type="button">复制文字</button>
+    </div>
+  </main>
+
+  <!-- ── 图片模式：解码二维码 ───────────────────────────────── -->
+  <main id="paneImage" class="pane">
+    <div class="thumb">
+      <img id="srcImage" alt="待解码的图片" hidden />
+      <p class="thumb-placeholder" id="thumbPlaceholder">正在获取图片…</p>
+    </div>
+
+    <p class="meta" id="decodeMeta">准备识别…</p>
+
+    <div class="field">
+      <label class="field-label" for="result">解码结果</label>
+      <textarea id="result" rows="3" readonly placeholder="尚未识别出二维码"></textarea>
+    </div>
+
+    <div class="actions">
+      <button id="openDecoded" class="primary" type="button" disabled>打开该页面</button>
+      <button id="copyResult" type="button" disabled>复制结果</button>
+      <button id="openSourcePage" type="button" disabled>打开图片所在页</button>
+    </div>
+
+    <section class="fallback">
+      <p class="hint" id="fallbackHint"></p>
+      <div class="actions">
+        <button id="grantHost" type="button" hidden>允许读取该站点图片并重试</button>
+        <button id="grantAll" type="button" hidden>允许读取所有网站图片（以后不再询问）</button>
+        <label class="file-btn">
+          选择本地图片
+          <input type="file" id="fileInput" accept="image/*" />
+        </label>
+      </div>
+      <p class="hint">也可以把图片拖进悬浮窗，或截图后按 Ctrl+V 粘贴。</p>
+    </section>
+  </main>
+
+  <p class="toast" id="toast" role="status" aria-live="polite"></p>
+
+  <!--
+    本页面以 iframe 形式嵌在宿主页面里（悬浮窗），也可以作为独立标签页打开（注入失败时的兜底）。
+    它属于扩展页面，受 MV3 的默认 CSP 约束：script-src 'self'，内联脚本与 eval 一律不执行，
+    因此两个第三方库必须以本地文件 + script 标签引入（不能用 CDN）。
+    这两个是经典脚本（非 ESM），会先于 module 脚本执行，panel.js 里直接读 globalThis 即可。
+    样式同样走外链文件 —— 这不是 CSP 的硬要求（默认 CSP 不收紧 style-src），
+    而是为了让面板与宿主页面的样式彻底解耦，也避免内联样式散落在标签属性上。
+  -->
+  <script src="../vendor/qrcode-generator.js"></script>
+  <script src="../vendor/jsQR.js"></script>
+  <script type="module" src="panel.js"></script>
+</body>
+</html>

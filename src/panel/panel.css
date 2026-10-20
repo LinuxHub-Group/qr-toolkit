@@ -1,0 +1,424 @@
+/*
+ * 面板样式。
+ *
+ * 本页面以 iframe 形式嵌在宿主页面里（宽 380px、高度由内容决定），
+ * 因此这里绝不能出现 100vh 之类的视口高度：那会让内容高度跟着 iframe 高度走，
+ * 与宿主「按内容调整 iframe 高度」的逻辑形成尺寸反馈。
+ * 内容超出宿主给的高度上限时，由 iframe 自身滚动。
+ *
+ * 深浅色跟随系统：悬浮窗不继承浏览器页面主题。
+ */
+:root {
+  color-scheme: light dark;
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-soft: #eef0f4;
+  --border: #dfe3e9;
+  --text: #12161c;
+  --muted: #6b7280;
+  --accent: #2563eb;
+  --accent-fg: #ffffff;
+  --danger: #b42318;
+  --ok: #06764f;
+  --radius: 10px;
+  --shell-radius: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171c;
+    --surface: #1e2127;
+    --surface-soft: #262a32;
+    --border: #31363f;
+    --text: #e9ebef;
+    --muted: #9aa3b2;
+    --accent: #5083ff;
+    --accent-fg: #0a0d13;
+    --danger: #ff9a90;
+    --ok: #6fdca6;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/*
+ * 作者样式里的 display 会盖掉 UA 样式表的 [hidden]{display:none}。
+ * 例如 .preview canvas{display:block} 会让带 hidden 的 canvas 依然显示出来，
+ * 因此这里统一把 hidden 提到最高优先，避免每加一个 display 就埋一个坑。
+ */
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.55 "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+}
+
+body.dropping {
+  outline: 2px dashed var(--accent);
+  outline-offset: -6px;
+}
+
+/* 模式切换：两套面板只显示其一，由 body[data-mode] 决定 */
+body[data-mode="text"] #paneImage,
+body[data-mode="image"] #paneText {
+  display: none;
+}
+
+/* ── 顶部工具条：固定 + 右上角关闭 ───────────────────────── */
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  /* 顶部圆角跟随 iframe 的裁切形状，滚动时不会露出方角 */
+  border-radius: var(--shell-radius) var(--shell-radius) 0 0;
+  /* 整条工具条是拖动把手 */
+  cursor: move;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.bar h1 {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 工具条上的交互元素不能显示成拖动光标 */
+.bar button,
+.bar label {
+  cursor: pointer;
+}
+
+/* 开关：input 视觉上隐藏但保持可聚焦与可键盘切换 */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.switch input {
+  appearance: none;
+  width: 0;
+  height: 0;
+  margin: 0;
+  opacity: 0;
+}
+
+.switch-track {
+  width: 28px;
+  height: 16px;
+  padding: 1px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  display: inline-flex;
+  align-items: center;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.switch-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.switch input:checked + .switch-track {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.switch input:checked + .switch-track .switch-thumb {
+  background: #ffffff;
+  transform: translateX(12px);
+}
+
+.switch input:focus-visible + .switch-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.icon-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.icon-btn:hover {
+  background: var(--surface-soft);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── 内容区 ───────────────────────────────────────────────── */
+
+.pane {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.field-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+}
+
+.field-inline {
+  flex: 1;
+}
+
+textarea,
+select,
+button,
+.file-btn {
+  font: inherit;
+  color: var(--text);
+}
+
+textarea,
+select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 7px 9px;
+  width: 100%;
+  resize: vertical;
+}
+
+textarea {
+  min-height: 56px;
+  line-height: 1.5;
+}
+
+textarea#result {
+  background: var(--surface-soft);
+}
+
+textarea:focus,
+select:focus,
+button:focus-visible,
+.file-btn:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.preview {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 132px;
+}
+
+.preview canvas {
+  width: 200px;
+  height: 200px;
+  max-width: 100%;
+  display: block;
+  /*
+   * 不设 image-rendering: pixelated。
+   * 后备存储已按 devicePixelRatio 放大、模块边界也对齐到了整数设备像素，
+   * 再叠一层最近邻缩放反而会在高 DPI 屏上把模块边缘放大成锯齿。
+   */
+}
+
+.preview-empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+.meta {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+button {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+
+button.primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.thumb {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-height: 108px;
+  max-height: 170px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.thumb img {
+  max-width: 100%;
+  max-height: 168px;
+  object-fit: contain;
+}
+
+.thumb-placeholder {
+  margin: 0;
+  color: var(--muted);
+}
+
+.fallback {
+  border-top: 1px dashed var(--border);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.file-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.file-btn:hover {
+  border-color: var(--accent);
+}
+
+/* 文件选择框只作为触发入口，外观完全由外层 label 承担 */
+.file-btn input[type="file"] {
+  display: none;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translate(-50%, 12px);
+  margin: 0;
+  max-width: 88%;
+  padding: 6px 13px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
+  font-size: 12px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.toast[data-kind="error"] {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.toast[data-kind="warn"] {
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.toast[data-kind="ok"] {
+  color: var(--ok);
+  border-color: var(--ok);
+}

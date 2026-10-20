@@ -1,0 +1,21 @@
+# 依赖与构建产物
+node_modules/
+dist/
+*.zip
+*.crx
+*.pem
+
+# Python 工具产物（tools/*.py 会生成缓存与图标预览图）
+__pycache__/
+*.py[cod]
+icon-preview/
+
+# 编辑器与系统文件
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 本地临时文件
+*.log
+*.tmp
